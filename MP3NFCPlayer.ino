@@ -38,8 +38,7 @@
 #include <Wire.h>
 #include <DFRobotDFPlayerMini.h>
 
-//#include <LCD.h>
-//#include <LiquidCrystal_I2C.h>
+#include <LiquidCrystal_I2C.h>
 
 #define SS_PIN 53
 #define RST_PIN 5
@@ -55,26 +54,23 @@
 #define B_WHITE 36
 
 //LCD
-//LiquidCrystal_I2C lcd(0x27);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 //RFID reader
 MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
-//MFRC522::MIFARE_Key key;
 
 //mp3 player
 SoftwareSerial playerSerial(10, 11); // RX, TX
 DFRobotDFPlayerMini myDFPlayer;
 
-//String lastID = "";
 String currentRFID = "";
 boolean RFIDChanged = false;
 
 //mp3 control
-//boolean isPlaying = false;
 boolean isPause = false;
 int currentTrack = 0;
 int currentFolder = 1;
-
+String idleScreen = "HALLO MIRIAM";
 
 boolean yellowIsPressed;
 boolean redIsPressed;
@@ -86,9 +82,13 @@ boolean blackIsPressed;
 int buttonIgnoreTime = 6;
 boolean ignoreButton = false;
 
+struct RFIDInfo {
+	String rfid;
+	int folderNumber;
+};
 
 struct FolderInfo {
-	String id;
+	//String id;
 	String titel;
 	int folderNumber;
 	boolean music;
@@ -99,17 +99,19 @@ struct FolderInfo {
 };
 
 FolderInfo cards [100];
+RFIDInfo rfids[200];
+
 //for card init
 int counter = 0;
+int rfidcounter = 0;
 int prev = 1;
 
 void printDFPlayerDetail(uint8_t type, int value);
 
-void addRFID(int folder,String titel, String rfid, boolean music, boolean revert) {
+void addFolder(int folder, String titel, String rfid, boolean music, boolean revert) {
 	struct FolderInfo info;
 	info.folderNumber = folder;
 	info.titel = titel;
-	info.id = rfid;
 	info.music = music;
 	info.revert = revert;
 	info.previous = prev;
@@ -122,37 +124,50 @@ void addRFID(int folder,String titel, String rfid, boolean music, boolean revert
 		cards[counter-1].next = folder;
 	}
 	counter++;
+
+	addRFID(folder, rfid);
+
 }
 
-void initRFIDs() {
-	addRFID(1, "Conni", "411917417016064129", false, false); //Dorfbewohner
-	addRFID(2, "Bibi und Tina", "", false, false);
-	addRFID(3, "Fuchsbande", "4735422619864128", false, false); //Tintenfisch Mädchen
-	addRFID(4, "Siggi", "4141192178173128", false, false); //Schaufelritter
-	addRFID(5, "Wickie", "493107219964128", false, false); //Link
-	addRFID(6, "Petterson und Findus", "429611413292133", false, false); //gebastelt
-	addRFID(7, "Paw Patrol", "46611212212472128", false, false); //Pikmin
-	addRFID(8, "Mascha und der Bär", "41735598273128", false, false); //Hund
-	addRFID(9, "Leo Lausemaus", "41913813022176129", false, false); //Diddy Kong
-	addRFID(10, "Lauras Stern", "42401481012572128", false, false); //Rosalina
-	addRFID(11, "Janosch", "413318523419864129", false, false);//Bowser
-	addRFID(12, "Der Mondbär", "470113342778128", false, false); // Wedding Peach
-	addRFID(13, "Bob der Baumeister", "", false, false);
+void addRFID(int folder, String rfid) {
+	struct RFIDInfo rinfo;
+	rinfo.rfid = rfid;
+	rinfo.folderNumber = folder;
+	rfids[rfidcounter] = rinfo;
+	rfidcounter++;
+}
 
-	addRFID(40, "Figarino", "4625320222473129", false, true); //Wario
+void initFolders() {
+	addFolder(1, "CONNI", "411917417016064129", false, false); //Dorfbewohner
+	addFolder(2, "Bibi und Tina", "424311413292133", false, false); //gebastelt
+	addFolder(3, "Fuchsbande", "4735422619864128", false, false); //Tintenfisch Mädchen
+	addFolder(4, "Siggi", "4141192178173128", false, false); //Schaufelritter
+	addFolder(5, "Wickie", "493107219964128", false, false); //Link
+	addFolder(6, "Petterson und Findus", "429611413292133", false, false); //gebastelt
+	addFolder(7, "Paw Patrol", "46611212212472128", false, false); //Pikmin
+	addFolder(8, "Mascha und der Bär", "41735598273128", false, false); //Hund
+	addFolder(9, "Leo Lausemaus", "41913813022176129", false, false); //Diddy Kong
+	addFolder(10, "Lauras Stern", "42401481012572128", false, false); //Rosalina
+	addFolder(11, "Janosch", "413318523419864129", false, false);//Bowser
+	addFolder(12, "Der Mondbär", "470113342778128", false, false); // Wedding Peach
+	addFolder(13, "Bob der Baumeister", "", false, false);
 
-	addRFID(50, "Unter meinem Bett", "", true, false);
-	addRFID(51, "Sing mit Conni", "", true, false);
-	addRFID(52, "Augsburger Puppenkiste", "", true, false);
-	addRFID(55, "Biene Maja Lieder", "", true, false);
-	addRFID(70, "Meine Lieder für das 2. Lebensjahr", "", true, false);
-	addRFID(71, "30 Spiel und Bewegungslieder", "", true, false);
-	addRFID(80, "Kinder singen Weihnachtslieder", "", true, false);
+	addFolder(40, "Figarino", "4625320222473129", false, true); //Wario
 
-	addRFID(90, "Die Ärzte", "641764325", true, false); //Karte
+	addFolder(50, "Unter meinem Bett", "", true, false);
+	addFolder(51, "Sing mit Conni", "", true, false);
+	addFolder(52, "Augsburger Puppenkiste", "", true, false);
+	addFolder(55, "Biene Maja Lieder", "", true, false);
+	addFolder(70, "Meine Lieder für das 2. Lebensjahr", "", true, false);
+	addFolder(71, "30 Spiel und Bewegungslieder", "", true, false);
+	addFolder(80, "Kinder singen Weihnachtslieder", "", true, false);
+
+	addFolder(90, "Die Ärzte", "641764325", true, false); //Karte
 	//addRFID(99, "Sounds", "", false, false);
 
 	cards[0].previous = cards[counter-1].folderNumber;
+
+	//addRFID(6,  )
 }
 
 void setup() {
@@ -160,13 +175,9 @@ void setup() {
 	Serial.begin(115200);
 
 	//LCD
-//  lcd.begin(16,2);
-//  lcd.clear();
-//  lcd.setCursor(0,0);
-//  lcd.print("Hallo");
-//  lcd.setCursor(0,1);
-//  lcd.print("Miriam");
-//  lcd.setBacklight(LOW);
+	lcd.init();
+	lcd.backlight();
+	lcd.print(idleScreen);
 
 	//RF-ID
 	SPI.begin(); // Init SPI bus
@@ -195,9 +206,9 @@ void setup() {
 		}
 	}
 	Serial.println(F("DFPlayer Mini online."));
-	myDFPlayer.volume(28); //Set volume value. From 0 to 30
+	myDFPlayer.volume(27); //Set volume value. From 0 to 30
 
-	initRFIDs();
+	initFolders();
 	currentRFID = "";
 }
 
@@ -249,15 +260,7 @@ void checkButtonActions() {
 		if (nextFolderInfo.revert) {
 			currentTrack = nextFolderInfo.tracks;
 		}
-		Serial.print("Nächster Ordner: ");
-		Serial.println(currentFolder);
-		Serial.print("Track: ");
-		Serial.println(currentTrack);
-		myDFPlayer.playFolder(currentFolder, currentTrack);
-		LEDOn();
-		if (currentRFID.length() > 0) {
-
-		}
+		playCurrentFolder(true);
 	}
 	if (whiteIsPressed) {
 		currentFolder = currentFolderInfo.previous;
@@ -265,12 +268,7 @@ void checkButtonActions() {
 		if (prevFolderInfo.revert) {
 			currentTrack = prevFolderInfo.tracks;
 		}
-		Serial.print("Vorheriger Ordner: ");
-		Serial.println(currentFolder);
-		Serial.print("Track: ");
-		Serial.println(currentTrack);
-		myDFPlayer.playFolder(currentFolder, currentTrack);
-		LEDOn();
+		playCurrentFolder(true);
 	}
 	if (blueIsPressed) {
 		Serial.println("Nächster Track");
@@ -286,6 +284,10 @@ void checkButtonActions() {
 		myDFPlayer.stop();
 		LEDOff();
 		currentRFID = "";
+		currentTrack = 0;
+		lcd.clear();
+		lcd.setCursor(1, 0);
+		lcd.print(idleScreen);
 	}
 	if (yellowIsPressed) {
 		if (isPause) {
@@ -294,14 +296,14 @@ void checkButtonActions() {
 			isPause = false;
 			LEDOn();
 		} else {
-			printFolderInfo(currentFolder, currentTrack);
-			Serial.print("currentRFID: ");
-			Serial.println(currentRFID);
 			if (currentFolder == 99 || currentTrack == 0) {
-				currentFolder = 1;
-				currentTrack = 1;
-				myDFPlayer.playFolder(currentFolder, currentTrack);
-				LEDOn();
+				if (currentTrack == 0) {
+					currentTrack = 1;
+				}
+				if (currentFolder == 99) {
+					currentFolder = 1;
+				}
+				playCurrentFolder(true);
 			} else {
 				Serial.println("Player to pause");
 				myDFPlayer.pause();
@@ -316,83 +318,71 @@ void nextFileInFolder() {
 	for (int i = 0; i < 100; i++) {
 		FolderInfo tmp = cards[i];
 		if (tmp.folderNumber == currentFolder) {
-			Serial.print("Aktueller Ordner: ");
-			Serial.println(currentFolder);
 			if (tmp.revert) {
 				if (currentTrack == 1) {
 					currentTrack = tmp.tracks;
-					Serial.println("A-R");
 				} else {
 					currentTrack = currentTrack - 1;
-					Serial.println("B-R");
 				}
 			} else {
 				if (currentTrack < tmp.tracks) {
 					currentTrack = currentTrack + 1;
-					Serial.println("A");
 				} else {
 					currentTrack = 1;
-					Serial.println("B");
 				}
 			}
 			break;
 		}
 	}
-	Serial.print("Starte Ordner ");
-	Serial.print(currentFolder);
-	Serial.print(" Lied ");
-	Serial.println(currentTrack);
-	myDFPlayer.playFolder(currentFolder, currentTrack);
+	playCurrentFolder(true);
 }
 
 void prevFileInFolder() {
 	for (int i = 0; i < 100; i++) {
 		FolderInfo tmp = cards[i];
 		if (tmp.folderNumber == currentFolder) {
-			Serial.print("Aktueller Ordner: ");
-			Serial.println(currentFolder);
 			if (tmp.revert) {
 				if (currentTrack < tmp.tracks) {
 					currentTrack = currentTrack + 1;
-					Serial.println("A-R");
 				} else {
 					currentTrack = 1;
-					Serial.println("B-R");
 				}
 			} else {
 				if (currentTrack == 1) {
 					currentTrack = tmp.tracks;
-					Serial.println("A");
 				} else {
 					currentTrack = currentTrack - 1;
-					Serial.println("B");
 				}
 			}
 			break;
 		}
 	}
-	Serial.print("Starte Ordner ");
-	Serial.print(currentFolder);
-	Serial.print(" Lied ");
-	Serial.println(currentTrack);
-	myDFPlayer.playFolder(currentFolder, currentTrack);
+	playCurrentFolder(true);
 }
 
 void playNFCTrack() {
 	Serial.print("playNFCTrack: Check currentRFID: ");
 	Serial.println(currentRFID);
-	Serial.print("Zugeordneter Ordner: ");
+
 	FolderInfo currentF;
 	boolean found = false;
-	for (int i = 0; i < 100; i++) {
-		FolderInfo tmp = cards[i];
-		if (tmp.id == currentRFID) {
-			currentF = tmp;
+	int tmpFolder = -1;
+	for (int i = 0; i < 200; i++) {
+		RFIDInfo tmp = rfids[i];
+		if (tmp.rfid == currentRFID) {
+			tmpFolder = tmp.folderNumber;
 			found = true;
 			break;
 		}
 	}
-	int tmpFolder = currentF.folderNumber;
+	for (int i = 0; i < 100; i++) {
+		FolderInfo tmp = cards[i];
+		if (tmp.folderNumber == tmpFolder) {
+			currentF = tmp;
+			break;
+		}
+	}
+
 	int track = 1;
 	if (currentF.revert) {
 		track = currentF.tracks;
@@ -401,24 +391,53 @@ void playNFCTrack() {
 	if (found) {
 		currentFolder = tmpFolder;
 		currentTrack = track;
-		Serial.print("Play track ");
-		Serial.print(currentTrack);
-		Serial.print(" of folder: ");
-		Serial.println(currentFolder);
 		myDFPlayer.stop();
 		delay(100);
-		myDFPlayer.playFolder(currentFolder, currentTrack);
-		//myDFPlayer.loopFolder(currentFolder);
-		LEDOn();
+		playCurrentFolder(true);
 	} else {
 		Serial.println("-keiner-");
 		currentFolder = 99;
 		currentTrack = 1;
 		myDFPlayer.stop();
 		delay(100);
-		myDFPlayer.playFolder(currentFolder, currentTrack);
-		LEDOn();
+		playCurrentFolder(true);
 	}
+}
+
+void playCurrentFolder(boolean setLCD) {
+	Serial.print("Play track ");
+	Serial.print(currentTrack);
+	Serial.print(" of folder: ");
+	Serial.println(currentFolder);
+	myDFPlayer.playFolder(currentFolder, currentTrack);
+
+	if (setLCD) {
+		boolean revert = false;
+		int maxTracks = 1;
+		String titel = idleScreen;
+		for (int i = 0; i < 100; i++) {
+			FolderInfo tmp = cards[i];
+			if (tmp.folderNumber == currentFolder) {
+				titel = tmp.titel;
+				revert = tmp.revert;
+				maxTracks = tmp.tracks;
+				break;
+			}
+		}
+
+		lcd.clear();
+		lcd.setCursor(0, 0);
+		lcd.print(titel);
+		lcd.setCursor(13, 1);
+		if (!revert) {
+			lcd.print(currentTrack);
+		} else {
+			int revTrack = maxTracks - currentTrack + 1;
+			lcd.print(revTrack);
+		}
+	}
+
+	LEDOn();
 }
 
 
@@ -452,17 +471,6 @@ void checkCard() {
 	rfid.PICC_HaltA();
 	rfid.PCD_StopCrypto1();
 
-}
-
-int getFolder(String rfid) {
-	int result = 0;
-	for (int i = 0; i < 100; i++) {
-		FolderInfo tmp = cards[i];
-			if (tmp.id == rfid) {
-				result = tmp.folderNumber;
-			}
-	}
-	return result;
 }
 
 boolean startButtonTimer = false;
